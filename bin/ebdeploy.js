@@ -23,11 +23,6 @@ else
   sourceDir = yargs._[0];
 
 var packageJson;
-
-var elasticbeanstalk = new AWS.ElasticBeanstalk({
-  region: yargs.region
-});
-
 var tasks = [];
 
 if (yargs.tempDir) {
@@ -38,6 +33,10 @@ else {
   workingDir = sourceDir;
 }
 
+var awsOptions = {
+  region: yargs.region || 'us-west-2'
+};
+
 tasks.push(loadPackageJson);
 tasks.push(deleteNodeModules);
 tasks.push(npmInstall);
@@ -46,7 +45,7 @@ tasks.push(revisedPackageJson);
 tasks.push(generateZipArchive);
 tasks.push(uploadArchiveToS3);
 tasks.push(createElasticBeanstalkVersion);
-// tasks.push(updateBeanstalkEnvironmentVersion);
+tasks.push(updateBeanstalkEnvironmentVersion);
 
 async.series(tasks, function(err) {
   if (err) {
@@ -210,9 +209,7 @@ function generateZipArchive(callback) {
 
 function uploadArchiveToS3(callback) {
   console.log("uploading deploy zip to S3");
-  var s3 = new AWS.S3({
-    region: yargs.region
-  });
+  var s3 = new AWS.S3(awsOptions);
 
   s3.putObject({
     Key: yargs.appName + "/" + versionLabel + ".zip",
@@ -244,6 +241,8 @@ function createElasticBeanstalkVersion(callback) {
 
 function updateBeanstalkEnvironmentVersion(callback) {
   console.log("deploying version %s to environment %s", versionLabel, yargs.environment);
+
+  var elasticbeanstalk = new AWS.ElasticBeanstalk(awsOptions);
 
   var options = {
     EnvironmentName: yargs.environment,
