@@ -1,0 +1,23 @@
+{
+  "name": "ebdeploy",
+  "version": "1.0.0",
+  "description": "A command line tool for deploying node apps to AWS ElasticBeanstalk",
+  "main": "bin/ebdeploy",
+  "bin": {
+   "ebdeploy": "bin/ebdeploy.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "archiver": "^0.14.4",
+    "async": "^1.0.0",
+    "aws-sdk": "^2.1.30",
+    "ncp": "^2.0.0",
+    "npm": "^2.10.1",
+    "npmi": "^1.0.1",
+    "yargs": "^3.9.1"
+  }
+}
