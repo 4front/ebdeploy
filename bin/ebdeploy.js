@@ -11,6 +11,7 @@ var AWS = require('aws-sdk');
 var debug = require('debug')('ebdeploy');
 var readdirp = require('readdirp');
 var rimraf = require('rimraf');
+var spawn = require('child_process').spawn;
 var yargs = require('yargs').argv;
 
 validateArgs();
@@ -37,10 +38,16 @@ var awsOptions = {
   region: yargs.region || 'us-west-2'
 };
 
+var elasticbeanstalk = new AWS.ElasticBeanstalk(awsOptions);
+var s3 = new AWS.S3(awsOptions);
+
 tasks.push(loadPackageJson);
 tasks.push(deleteNodeModules);
 tasks.push(npmInstall);
-// tasks.push(stripOptionalDependencies);
+
+if (yargs.skipOptionalDependencies === true)
+  tasks.push(stripOptionalDependencies);
+
 tasks.push(revisedPackageJson);
 tasks.push(generateZipArchive);
 tasks.push(uploadArchiveToS3);
@@ -106,15 +113,71 @@ function loadPackageJson(callback) {
 function npmInstall(callback) {
   console.log("running npm install");
 
-  var options = {
-    path: workingDir,
-    npmLoad: {
-      logLevel: 'silent',
-      production: true // Don't install devDependencies
+  var npmArgs = ['install', '--production'];
+  if (yargs.skipOptionalDependencies === true)
+    npmArgs.push('--no-optional');
+
+  var child = spawn('npm', npmArgs, {cwd: workingDir});
+  child.stdout.on('data', function(data) {
+    console.log(data.toString());
+  });
+
+  child.stderr.on('data', function(data) {
+    console.error(data.toString());
+  });
+
+  child.on('error', function(err) {
+    return callback(err);
+  });
+
+  child.on('close', function(code) {
+    if (code !== 0)
+      return callback(new Error("npm install did not exit normally"));
+
+    return callback();
+  });
+}
+
+// Even though we are shipping node_modules in the zip,
+// ElasticBeanstalk is still going to run npm install and
+// and we are not able to specify the --skip-optional flag.
+// So instead strip out all optionalDependency sections from
+// each package.json file.
+function stripOptionalDependencies(callback) {
+  console.log("Stripping optional dependencies from package.json files");
+
+  var opts = {
+    root: workingDir,
+    fileFilter: function(entry) {
+      return entry.name === 'package.json';
     }
   };
 
-  npmi(options, callback);
+  readdirp(opts, function(err, res) {
+    if (err) return callback(err);
+
+    async.each(res.files, function(f, cb) {
+      fs.readFile(f.fullPath, function(err, json) {
+        if (err) return cb(err);
+
+        var packageJson;
+        try {
+          packageJson = JSON.parse(json);
+        }
+        catch (err) {
+          return cb(new Error("File " + f.path + " is not valid JSON"));
+        }
+
+        if (!packageJson.optionalDependencies)
+          return cb();
+
+        // Delete the optionalDependencies section and save the file back
+        debug("stripping optionalDependencies from %s", f.path);
+        delete packageJson.optionalDependencies;
+        fs.writeFile(f.fullPath, JSON.stringify(packageJson, null, 2), cb);
+      });
+    }, callback);
+  });
 }
 
 // Write a modified package.json without any dependencies.
@@ -209,7 +272,6 @@ function generateZipArchive(callback) {
 
 function uploadArchiveToS3(callback) {
   console.log("uploading deploy zip to S3");
-  var s3 = new AWS.S3(awsOptions);
 
   s3.putObject({
     Key: yargs.appName + "/" + versionLabel + ".zip",
@@ -231,6 +293,7 @@ function createElasticBeanstalkVersion(callback) {
       S3Key: yargs.appName + "/" + versionLabel + '.zip'
     }
   };
+
   elasticbeanstalk.createApplicationVersion(params, function(err, data) {
     if (err) return callback(err);
 
@@ -241,8 +304,6 @@ function createElasticBeanstalkVersion(callback) {
 
 function updateBeanstalkEnvironmentVersion(callback) {
   console.log("deploying version %s to environment %s", versionLabel, yargs.environment);
-
-  var elasticbeanstalk = new AWS.ElasticBeanstalk(awsOptions);
 
   var options = {
     EnvironmentName: yargs.environment,

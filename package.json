@@ -14,7 +14,11 @@
     "bin/",
     "README.md"
   ],
-  "author": "",
+  "author": "David Von Lehman <https://github.com/dvonlehman>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/4front/ebdeploy"
+  },
   "license": "Apache-2.0",
   "dependencies": {
     "archiver": "^0.14.4",
