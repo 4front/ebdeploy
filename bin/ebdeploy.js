@@ -7,11 +7,10 @@ var fs = require('fs');
 var os = require('os');
 var ncp = require('ncp');
 var npmi = require('npmi');
-var npm = require('npm');
 var AWS = require('aws-sdk');
 var debug = require('debug')('ebdeploy');
 var readdirp = require('readdirp');
-var child_process = require('child_process');
+var rimraf = require('rimraf');
 var yargs = require('yargs').argv;
 
 validateArgs();
@@ -40,19 +39,29 @@ else {
 }
 
 tasks.push(loadPackageJson);
+tasks.push(deleteNodeModules);
 tasks.push(npmInstall);
+// tasks.push(stripOptionalDependencies);
 tasks.push(revisedPackageJson);
 tasks.push(generateZipArchive);
 tasks.push(uploadArchiveToS3);
 tasks.push(createElasticBeanstalkVersion);
-tasks.push(updateBeanstalkEnvironmentVersion);
+// tasks.push(updateBeanstalkEnvironmentVersion);
 
 async.series(tasks, function(err) {
-  if (err)
+  if (err) {
     console.error(err);
-  else
-    console.log("deploy contents in %s", workingDir);
+    process.exit(1);
+  }
+  else {
+    console.log("deployment %s complete", versionLabel);
+    process.exit(0);
+  }
 });
+
+function deleteNodeModules(callback) {
+  rimraf(path.join(workingDir, 'node_modules'), callback);
+}
 
 function createTempWorkingDirectory(callback) {
   workingDir = path.join(os.tmpdir(), versionLabel);
@@ -132,8 +141,8 @@ function generateZipArchive(callback) {
   var zipStream = fs.createWriteStream(zipFile);
   var archive = archiver('zip');
 
-  // Ensure that node_modules ARE included in the zip archive
-  var fileFilters = [], directoryFilters = [];
+  // Make sure we don't include the zip file itself or the temporary ebpackage.json
+  var fileFilters = ['!' + versionLabel + '.zip', '!ebpackage.json'], directoryFilters = [];
 
   fs.readFile(path.join(workingDir, ".ebignore"), function(err, ebIgnore) {
     if (err) {
