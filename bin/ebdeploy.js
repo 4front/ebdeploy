@@ -267,7 +267,7 @@ function validateArgs() {
 
   if (error) {
     console.error(error);
-    process.exit();
+    process.exit(1);
   }
 }
 
