@@ -11,6 +11,9 @@ var AWS = require('aws-sdk');
 var debug = require('debug')('ebdeploy');
 var readdirp = require('readdirp');
 var rimraf = require('rimraf');
+var urljoin = require('url-join');
+var proxy = require('proxy-agent');
+var HttpsProxyAgent = require('https-proxy-agent');
 var spawn = require('child_process').spawn;
 var yargs = require('yargs').argv;
 
@@ -24,6 +27,29 @@ else
   sourceDir = yargs._[0];
 
 var packageJson;
+
+var awsConfig = {
+  logger: process.stdout,
+  region: yargs.region || 'us-west-2',
+  maxRetries: 0,
+  httpOptions: {
+    timeout: 30000
+  }
+};
+
+if (yargs.profile) {
+  console.log("using AWS profile %s", yargs.profile);
+  awsConfig.credentials = new AWS.SharedIniFileCredentials({profile: yargs.profile});
+}
+
+if (process.env.HTTPS_PROXY) {
+  console.log("setting http proxy to %s", process.env.HTTPS_PROXY);
+  awsConfig.httpOptions.agent = new HttpsProxyAgent(process.env.HTTPS_PROXY);
+}
+
+console.log("updating AWS config");
+AWS.config.update(awsConfig);
+
 var tasks = [];
 
 if (yargs.tempDir) {
@@ -34,12 +60,12 @@ else {
   workingDir = sourceDir;
 }
 
-var awsOptions = {
-  region: yargs.region || 'us-west-2'
-};
+var elasticbeanstalk = new AWS.ElasticBeanstalk();
+var s3 = new AWS.S3({
+  s3ForcePathStyle: true
+});
 
-var elasticbeanstalk = new AWS.ElasticBeanstalk(awsOptions);
-var s3 = new AWS.S3(awsOptions);
+var s3Key = yargs.s3Path + "/" + versionLabel + ".zip";
 
 tasks.push(loadPackageJson);
 tasks.push(deleteNodeModules);
@@ -209,7 +235,7 @@ function generateZipArchive(callback) {
   fs.readFile(path.join(workingDir, ".ebignore"), function(err, ebIgnore) {
     if (err) {
       if (err.code === 'ENOENT')
-        return callback(new Error("No .ebinclude file found"));
+        return callback(new Error("No .ebignore file found"));
       else
         return callback(err);
     }
@@ -271,10 +297,10 @@ function generateZipArchive(callback) {
 }
 
 function uploadArchiveToS3(callback) {
-  console.log("uploading deploy zip to S3");
+  console.log("uploading deploy zip to S3 with key %s", s3Key);
 
   s3.putObject({
-    Key: yargs.appName + "/" + versionLabel + ".zip",
+    Key: s3Key,
     Body: fs.createReadStream(path.join(workingDir, versionLabel + '.zip')),
     Bucket: yargs.bucket
   }, callback);
@@ -290,7 +316,7 @@ function createElasticBeanstalkVersion(callback) {
     AutoCreateApplication: false,
     SourceBundle: {
       S3Bucket: yargs.bucket,
-      S3Key: yargs.appName + "/" + versionLabel + '.zip'
+      S3Key: s3Key
     }
   };
 

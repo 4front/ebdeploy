@@ -25,11 +25,14 @@
     "async": "^1.0.0",
     "aws-sdk": "^2.1.30",
     "debug": "^2.2.0",
+    "https-proxy-agent": "^0.3.5",
     "ncp": "^2.0.0",
     "npm": "^2.10.1",
     "npmi": "^1.0.1",
+    "proxy-agent": "^1.1.0",
     "readdirp": "^1.3.0",
     "rimraf": "^2.3.4",
+    "url-join": "0.0.1",
     "yargs": "^3.9.1"
   }
 }
