@@ -1,6 +1,6 @@
 {
   "name": "ebdeploy",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A command line tool for deploying node apps to AWS ElasticBeanstalk",
   "main": "bin/ebdeploy",
   "bin": {

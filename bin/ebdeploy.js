@@ -76,9 +76,12 @@ if (yargs.skipOptionalDependencies === true)
 
 tasks.push(revisedPackageJson);
 tasks.push(generateZipArchive);
-tasks.push(uploadArchiveToS3);
-tasks.push(createElasticBeanstalkVersion);
-tasks.push(updateBeanstalkEnvironmentVersion);
+
+if (yargs.dryRun !== true) {
+  tasks.push(uploadArchiveToS3);
+  tasks.push(createElasticBeanstalkVersion);
+  tasks.push(updateBeanstalkEnvironmentVersion);
+}
 
 async.series(tasks, function(err) {
   if (err) {
