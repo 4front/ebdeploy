@@ -62,7 +62,10 @@ else {
 
 var elasticbeanstalk = new AWS.ElasticBeanstalk();
 var s3 = new AWS.S3({
-  s3ForcePathStyle: true
+  s3ForcePathStyle: true,
+  httpOptions: {
+    timeout: 60000
+  }
 });
 
 var s3Key = yargs.s3Path + "/" + versionLabel + ".zip";
